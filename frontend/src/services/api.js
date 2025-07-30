@@ -14,13 +14,13 @@ const API = axios.create({
 // Function to set the token after login and store in sessionStorage
 export const setAuthToken = (token) => {
   authToken = token
-  sessionStorage.setItem("jwtToken", token) // Store in sessionStorage
+  sessionStorage.setItem("jwtToken", token)
 }
 
 // Function to clear the token on logout and remove from sessionStorage
 export const clearAuthToken = () => {
   authToken = null
-  sessionStorage.removeItem("jwtToken") // Remove from sessionStorage
+  sessionStorage.removeItem("jwtToken")
 }
 
 // Function to get the token (from in-memory or sessionStorage)
@@ -28,10 +28,9 @@ export const getAuthToken = () => {
   if (authToken) {
     return authToken
   }
-  // If not in memory, try to retrieve from sessionStorage
   const storedToken = sessionStorage.getItem("jwtToken")
   if (storedToken) {
-    authToken = storedToken // Set to in-memory for subsequent requests
+    authToken = storedToken
     return storedToken
   }
   return null
@@ -40,7 +39,7 @@ export const getAuthToken = () => {
 // Request interceptor to add the token
 API.interceptors.request.use(
   (req) => {
-    const token = getAuthToken() // Always try to get the latest token
+    const token = getAuthToken()
     if (token) {
       req.headers.Authorization = `Bearer ${token}`
     }
@@ -56,7 +55,6 @@ API.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token expired or invalid
       clearAuthToken()
       window.location.href = "/login"
     }

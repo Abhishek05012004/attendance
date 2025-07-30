@@ -5,20 +5,18 @@ const Notification = require("../models/Notification") // Import Notification mo
 const jwt = require("jsonwebtoken")
 const router = express.Router()
 
-// Middleware to verify JWT token
-const verifyToken = (req, res, next) => {
-  const token = req.header("Authorization")?.replace("Bearer ", "")
-
-  if (!token) {
-    return res.status(401).json({ message: "Access denied. No token provided." })
-  }
-
+const auth = async (req, res, next) => {
   try {
+    const token = req.headers.authorization?.split(" ")[1]
+    if (!token) return res.status(403).json({ error: "No token provided" })
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = decoded
+    req.user = await User.findById(decoded.id)
+    if (!req.user) return res.status(403).json({ error: "Invalid token" })
+
     next()
   } catch (error) {
-    res.status(401).json({ message: "Invalid token." })
+    res.status(403).json({ error: "Invalid token" })
   }
 }
 
@@ -30,7 +28,7 @@ const adminAuth = (req, res, next) => {
 }
 
 // Submit leave request
-router.post("/request", verifyToken, async (req, res) => {
+router.post("/request", auth, async (req, res) => {
   try {
     const { leaveType, startDate, endDate, reason } = req.body
 
@@ -75,7 +73,7 @@ router.post("/request", verifyToken, async (req, res) => {
 })
 
 // Get leave requests (for employees - their own, for admin/manager - all)
-router.get("/requests", verifyToken, async (req, res) => {
+router.get("/requests", auth, async (req, res) => {
   try {
     const { page: pageStr = "1", limit: limitStr = "10", status, userId } = req.query
     const page = Number.parseInt(pageStr)
@@ -113,13 +111,12 @@ router.get("/requests", verifyToken, async (req, res) => {
       total,
     })
   } catch (error) {
-    console.error("Leave requests error:", error)
-    res.status(500).json({ message: "Server error" })
+    res.status(500).json({ error: error.message })
   }
 })
 
 // Approve/Reject leave request (Admin/Manager only)
-router.put("/requests/:id", verifyToken, adminAuth, async (req, res) => {
+router.put("/requests/:id", auth, adminAuth, async (req, res) => {
   try {
     const { status, comments } = req.body // status: 'approved' or 'rejected'
 
@@ -149,7 +146,7 @@ router.put("/requests/:id", verifyToken, adminAuth, async (req, res) => {
 })
 
 // Get leave statistics
-router.get("/stats", verifyToken, async (req, res) => {
+router.get("/stats", auth, async (req, res) => {
   try {
     const query = req.user.role === "employee" ? { user: req.user._id } : {}
 

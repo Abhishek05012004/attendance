@@ -3,7 +3,6 @@ const User = require("../models/User")
 const RegistrationRequest = require("../models/RegistrationRequest")
 const Notification = require("../models/Notification") // Import Notification model
 const jwt = require("jsonwebtoken")
-const bcrypt = require("bcryptjs")
 const crypto = require("crypto")
 const router = express.Router()
 const nodemailer = require("nodemailer")
@@ -41,29 +40,12 @@ const adminAuth = (req, res, next) => {
   next()
 }
 
-// Middleware to verify JWT token
-const verifyToken = (req, res, next) => {
-  const token = req.header("Authorization")?.replace("Bearer ", "")
-
-  if (!token) {
-    return res.status(401).json({ message: "Access denied. No token provided." })
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = decoded
-    next()
-  } catch (error) {
-    res.status(401).json({ message: "Invalid token." })
-  }
-}
-
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password, department, position, phone, address, role, adminCode } = req.body
 
     console.log("=== REGISTRATION REQUEST ===")
-    console.log("Data received:", { name, email, password, department, position, phone, address, role })
+    console.log("Data received:", { name, email, department, position, phone, address, role })
 
     // Validation - ALL fields are now required
     if (!name || !email || !password || !department || !position || !phone || !address || !adminCode) {
@@ -105,15 +87,11 @@ router.post("/register", async (req, res) => {
       }
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10)
-    const hashedPassword = await bcrypt.hash(password, salt)
-
     // Create registration request (not a user yet)
     const registrationRequest = new RegistrationRequest({
       name,
       email,
-      password: hashedPassword, // Store as hashed text
+      password, // Store as plain text for now
       department,
       position,
       phone,
@@ -377,12 +355,12 @@ router.post("/login", async (req, res) => {
     console.log("- Role:", user.role)
     console.log("- Active:", user.isActive)
 
-    // Check password (hashed comparison)
-    const isMatch = await bcrypt.compare(password, user.password)
+    // Check password (direct comparison)
+    const isPasswordValid = password === user.password
 
-    console.log("Password comparison result:", isMatch)
+    console.log("Password comparison result:", isPasswordValid)
 
-    if (!isMatch) {
+    if (!isPasswordValid) {
       console.log("❌ Password comparison failed")
       return res.status(401).json({ error: "Invalid email or password" })
     }
@@ -532,7 +510,58 @@ router.post("/forgot-password", async (req, res) => {
       },
       to: email,
       subject: "Password Reset Request - Employee Attendance System",
-      html: ``,
+      html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #2563eb; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px;">Password Reset Request</h1>
+        </div>
+        
+        <div style="background-color: #f8fafc; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e2e8f0;">
+          <p style="font-size: 16px; color: #334155; margin-bottom: 20px;">Hello <strong>${user.name}</strong>,</p>
+          
+          <p style="font-size: 16px; color: #334155; line-height: 1.6; margin-bottom: 20px;">
+            You have requested to reset your password for the Employee Attendance System. 
+            If you did not make this request, please ignore this email.
+          </p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" 
+               style="background-color: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Reset Your Password
+            </a>
+          </div>
+          
+          <p style="font-size: 14px; color: #64748b; margin-bottom: 15px;">
+            Or copy and paste this link in your browser:
+          </p>
+          <p style="word-break: break-all; color: #2563eb; background-color: white; padding: 10px; border-radius: 4px; border: 1px solid #e2e8f0; font-family: monospace; font-size: 12px;">
+            ${resetUrl}
+          </p>
+          
+          <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #92400e;">
+              <strong>⚠️ Security Notice:</strong> This link will expire in 1 hour for your security.
+            </p>
+          </div>
+          
+          <p style="font-size: 14px; color: #64748b; margin-bottom: 10px;">
+            <strong>Employee Details:</strong>
+          </p>
+          <ul style="font-size: 14px; color: #64748b; margin-bottom: 20px;">
+            <li>Employee ID: ${user.employeeId}</li>
+            <li>Department: ${user.department}</li>
+            <li>Position: ${user.position}</li>
+          </ul>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px; padding: 20px; background-color: #f1f5f9; border-radius: 6px;">
+          <p style="color: #64748b; font-size: 12px; margin: 0;">
+            This is an automated email from Employee Attendance System.<br>
+            Please do not reply to this email. If you need assistance, contact your system administrator.
+          </p>
+        </div>
+      </div>
+    `,
     }
 
     console.log("Sending email to:", email)
@@ -587,12 +616,8 @@ router.post("/reset-password", async (req, res) => {
 
     console.log("✅ Valid token found for user:", user.email)
 
-    // Hash new password
-    const salt = await bcrypt.genSalt(10)
-    const hashedNewPassword = await bcrypt.hash(newPassword, salt)
-
-    // Update password and clear reset token
-    user.password = hashedNewPassword
+    // Update password and clear reset token (store as plain text)
+    user.password = newPassword
     user.resetPasswordToken = undefined
     user.resetPasswordExpiry = undefined
     await user.save()
@@ -609,16 +634,24 @@ router.post("/reset-password", async (req, res) => {
   }
 })
 
-router.get("/profile", verifyToken, async (req, res) => {
+router.get("/profile", async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select("-password")
-    if (!user) {
-      return res.status(404).json({ message: "User not found" })
+    const token = req.headers.authorization?.split(" ")[1]
+    if (!token) {
+      return res.status(403).json({ error: "No token provided" })
     }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const user = await User.findById(decoded.id).select("-password")
+
+    if (!user || !user.isActive) {
+      return res.status(404).json({ error: "User not found or inactive" })
+    }
+
     res.json(user)
   } catch (error) {
     console.error("Profile error:", error)
-    res.status(500).json({ message: "Server error" })
+    res.status(500).json({ error: "Invalid token" })
   }
 })
 

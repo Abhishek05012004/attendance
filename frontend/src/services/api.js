@@ -5,7 +5,7 @@ let authToken = null
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "https://attendance-system-backend-nine.vercel.app/api",
-  timeout: 15000,
+  timeout: 10000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -56,9 +56,7 @@ API.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       clearAuthToken()
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login"
-      }
+      window.location.href = "/login"
     }
     return Promise.reject(error)
   },

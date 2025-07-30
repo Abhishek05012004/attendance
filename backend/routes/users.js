@@ -6,18 +6,20 @@ const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
 const router = express.Router()
 
-const auth = async (req, res, next) => {
+// Middleware to verify JWT token
+const verifyToken = (req, res, next) => {
+  const token = req.header("Authorization")?.replace("Bearer ", "")
+
+  if (!token) {
+    return res.status(401).json({ message: "Access denied. No token provided." })
+  }
+
   try {
-    const token = req.headers.authorization?.split(" ")[1]
-    if (!token) return res.status(403).json({ error: "No token provided" })
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = await User.findById(decoded.id)
-    if (!req.user) return res.status(403).json({ error: "Invalid token" })
-
+    req.user = decoded
     next()
   } catch (error) {
-    res.status(403).json({ error: "Invalid token" })
+    res.status(401).json({ message: "Invalid token." })
   }
 }
 
@@ -44,9 +46,13 @@ const getCurrentDate = () => {
   return `${year}-${month}-${day}`
 }
 
-// FIXED: Allow manager/HR to access users list for reports
-router.get("/", auth, managerAuth, async (req, res) => {
+// Get all users (admin/hr only)
+router.get("/", verifyToken, async (req, res) => {
   try {
+    if (!["admin", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Access denied" })
+    }
+
     const { page: pageStr = "1", limit: limitStr = "10", search, department } = req.query
     const page = Number.parseInt(pageStr)
     const limit = Number.parseInt(limitStr)
@@ -80,11 +86,12 @@ router.get("/", auth, managerAuth, async (req, res) => {
       total,
     })
   } catch (error) {
-    res.status(500).json({ error: error.message })
+    console.error("Get users error:", error)
+    res.status(500).json({ message: "Server error" })
   }
 })
 
-router.get("/departments", auth, async (req, res) => {
+router.get("/departments", verifyToken, async (req, res) => {
   try {
     const departments = await User.distinct("department", { isActive: true })
     res.json(departments)
@@ -93,7 +100,7 @@ router.get("/departments", auth, async (req, res) => {
   }
 })
 
-router.put("/:id", auth, adminAuth, async (req, res) => {
+router.put("/:id", verifyToken, adminAuth, async (req, res) => {
   try {
     const { name, email, department, position, phone, address, salary, role } = req.body
 
@@ -113,7 +120,7 @@ router.put("/:id", auth, adminAuth, async (req, res) => {
   }
 })
 
-router.delete("/:id", auth, adminAuth, async (req, res) => {
+router.delete("/:id", verifyToken, adminAuth, async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true })
 
@@ -128,7 +135,7 @@ router.delete("/:id", auth, adminAuth, async (req, res) => {
 })
 
 // FIXED: Dashboard stats with correct date handling and department overview
-router.get("/dashboard-stats", auth, managerAuth, async (req, res) => {
+router.get("/dashboard-stats", verifyToken, managerAuth, async (req, res) => {
   try {
     const today = getCurrentDate()
     console.log("Dashboard stats - Today's date:", today)
@@ -171,7 +178,7 @@ router.get("/dashboard-stats", auth, managerAuth, async (req, res) => {
 })
 
 // Get recent attendance for admin dashboard (today's data only)
-router.get("/recent-attendance", auth, managerAuth, async (req, res) => {
+router.get("/recent-attendance", verifyToken, managerAuth, async (req, res) => {
   try {
     const today = getCurrentDate()
 
@@ -187,7 +194,7 @@ router.get("/recent-attendance", auth, managerAuth, async (req, res) => {
 })
 
 // Mark attendance for employees (Admin/Manager can mark for others)
-router.post("/mark-attendance", auth, adminAuth, async (req, res) => {
+router.post("/mark-attendance", verifyToken, adminAuth, async (req, res) => {
   try {
     const { userId, action, location } = req.body
     const today = getCurrentDate()

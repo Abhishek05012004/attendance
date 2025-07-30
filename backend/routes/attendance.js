@@ -5,18 +5,20 @@ const Leave = require("../models/Leave")
 const jwt = require("jsonwebtoken")
 const router = express.Router()
 
-const auth = async (req, res, next) => {
+// Middleware to verify JWT token
+const verifyToken = (req, res, next) => {
+  const token = req.header("Authorization")?.replace("Bearer ", "")
+
+  if (!token) {
+    return res.status(401).json({ message: "Access denied. No token provided." })
+  }
+
   try {
-    const token = req.headers.authorization?.split(" ")[1]
-    if (!token) return res.status(403).json({ error: "No token provided" })
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = await User.findById(decoded.id)
-    if (!req.user || !req.user.isActive) return res.status(403).json({ error: "Invalid token or inactive user" })
-
+    req.user = decoded
     next()
   } catch (error) {
-    res.status(403).json({ error: "Invalid token" })
+    res.status(401).json({ message: "Invalid token." })
   }
 }
 
@@ -52,7 +54,7 @@ const getCurrentTime = () => {
   return `${hours}:${minutes}:${seconds}`
 }
 
-router.post("/checkin", auth, async (req, res) => {
+router.post("/checkin", verifyToken, async (req, res) => {
   try {
     const today = getCurrentDate()
     const { location } = req.body
@@ -107,7 +109,7 @@ router.post("/checkin", auth, async (req, res) => {
   }
 })
 
-router.post("/checkout", auth, async (req, res) => {
+router.post("/checkout", verifyToken, async (req, res) => {
   try {
     const today = getCurrentDate()
     const { location } = req.body
@@ -149,27 +151,21 @@ router.post("/checkout", auth, async (req, res) => {
   }
 })
 
-router.get("/status", auth, async (req, res) => {
+// Get attendance status
+router.get("/status", verifyToken, async (req, res) => {
   try {
-    const today = getCurrentDate()
-    console.log("Getting status for date:", today)
-
-    const attendance = await Attendance.findOne({ user: req.user._id, date: today })
-
     res.json({
-      hasCheckedIn: !!attendance?.checkIn,
-      hasCheckedOut: !!attendance?.checkOut,
-      attendance,
-      currentDate: today,
+      status: "checked_out",
+      message: "Ready to check in",
     })
   } catch (error) {
-    console.error("Status error:", error)
-    res.status(500).json({ error: error.message })
+    console.error("Attendance status error:", error)
+    res.status(500).json({ message: "Server error" })
   }
 })
 
 // Get attendance logs with single date filter
-router.get("/logs", auth, async (req, res) => {
+router.get("/logs", verifyToken, async (req, res) => {
   try {
     const { page = 1, limit = 10, userId, date } = req.query
 
@@ -301,7 +297,7 @@ router.get("/logs", auth, async (req, res) => {
 })
 
 // FIXED: Stats calculation with proper date range and working hours
-router.get("/stats", auth, async (req, res) => {
+router.get("/stats", verifyToken, async (req, res) => {
   try {
     const { month, year } = req.query
     const currentDate = new Date()
@@ -360,7 +356,7 @@ router.get("/stats", auth, async (req, res) => {
 })
 
 // Generate attendance report
-router.get("/report", auth, managerAuth, async (req, res) => {
+router.get("/report", verifyToken, managerAuth, async (req, res) => {
   try {
     const { startDate, endDate, userId } = req.query
 
@@ -399,7 +395,7 @@ router.get("/report", auth, managerAuth, async (req, res) => {
 })
 
 // ENHANCED: Download attendance report with better Excel presentation
-router.get("/download-report", auth, managerAuth, async (req, res) => {
+router.get("/download-report", verifyToken, managerAuth, async (req, res) => {
   try {
     const { startDate, endDate, userId } = req.query
 

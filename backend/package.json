@@ -1,5 +1,5 @@
 {
-  "name": "attendance-backend",
+  "name": "employee-attendance-backend",
   "version": "1.0.0",
   "description": "Employee Attendance System Backend",
   "main": "server.js",
@@ -8,15 +8,16 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.6.1",
-    "express": "^4.21.2",
+    "dotenv": "^16.3.1",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^7.8.7",
-    "nodemailer": "^7.0.5"
+    "bcryptjs": "^2.4.3",
+    "nodemailer": "^6.9.4",
+    "crypto": "^1.0.1"
   },
-  "devDependencies": {
-    "nodemon": "^3.1.10"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

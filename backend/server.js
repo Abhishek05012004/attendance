@@ -40,24 +40,61 @@ app.use(
 app.use(express.json({ limit: "10mb" }))
 app.use(express.urlencoded({ extended: true, limit: "10mb" }))
 
-// Database connection
+// Enhanced MongoDB connection with better error handling
 console.log("Connecting to MongoDB...")
 console.log("MongoDB URI:", process.env.MONGO_URI ? "Set" : "Not set")
 console.log("JWT Secret:", process.env.JWT_SECRET ? "Set" : "Not set")
 
+// MongoDB connection options
+const mongoOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 10000, // 10 seconds
+  socketTimeoutMS: 45000, // 45 seconds
+  maxPoolSize: 10, // Maintain up to 10 socket connections
+  minPoolSize: 5, // Maintain a minimum of 5 socket connections
+  maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+  bufferMaxEntries: 0, // Disable mongoose buffering
+  bufferCommands: false, // Disable mongoose buffering
+}
+
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGO_URI, mongoOptions)
   .then(() => {
     console.log("✅ MongoDB connected successfully")
     console.log("Database name:", mongoose.connection.name)
+    console.log("Connection state:", mongoose.connection.readyState) // 1 = connected
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err)
+    console.error("Connection string format should be: mongodb+srv://username:password@cluster.mongodb.net/database")
     process.exit(1)
   })
+
+// Handle MongoDB connection events
+mongoose.connection.on("connected", () => {
+  console.log("✅ Mongoose connected to MongoDB")
+})
+
+mongoose.connection.on("error", (err) => {
+  console.error("❌ Mongoose connection error:", err)
+})
+
+mongoose.connection.on("disconnected", () => {
+  console.log("⚠️ Mongoose disconnected from MongoDB")
+})
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  try {
+    await mongoose.connection.close()
+    console.log("MongoDB connection closed through app termination")
+    process.exit(0)
+  } catch (err) {
+    console.error("Error during graceful shutdown:", err)
+    process.exit(1)
+  }
+})
 
 // Root route - Welcome message
 app.get("/", (req, res) => {
